@@ -1683,115 +1683,104 @@ function abrirPlacar(pendId, googleUrl){
   showPlacarInput(pendId);
 }
 
+// Log de acompanhamento de placares por pendente
+var placarLog={};
+
 function showPlacarInput(pendId){
   const rowEl=document.getElementById('pend-row-'+pendId);
   if(!rowEl) return;
-  // Remove campo anterior se existir
-  const old=document.getElementById('placar-input-'+pendId);
-  if(old) old.remove();
-
-  const p=pendentes.find(function(x){return String(x.id)===String(pendId);});
-  if(!p) return;
-
-  const div=document.createElement('div');
-  div.id='placar-input-'+pendId;
-  div.style.cssText='width:100%;margin-top:10px;padding:12px 14px;background:rgba(79,142,247,0.08);border:1px solid var(--blue-border);border-radius:var(--radius);';
-  div.innerHTML='<div style="font-size:11px;font-family:var(--mono);color:var(--blue);margin-bottom:8px;font-weight:600;">📋 Informe o placar que você viu no Google</div>'
-    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
-      +'<input id="placar-val-'+pendId+'" type="text" placeholder="ex: 1-0 ou 0-0" maxlength="6"'
-        +' style="width:100px;padding:7px 10px;font-size:14px;font-weight:600;font-family:var(--mono);border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);text-align:center;"'
-        +' oninput="calcPlacarSugestao(\''+pendId+'\')">'  
-      +'<div id="placar-sug-'+pendId+'" style="font-size:12px;font-family:var(--mono);color:var(--text3);"></div>'
-    +'</div>'
-    +'<div id="placar-btns-'+pendId+'" style="display:none;margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;"></div>';
-
-  // Insere dentro do pinfo
-  const pinfo=rowEl.querySelector('.pinfo');
-  if(pinfo) pinfo.appendChild(div);
-  // Foco automático no campo
+  if(!placarLog[pendId]) placarLog[pendId]=[];
+  var existing=document.getElementById('placar-input-'+pendId);
+  if(!existing){
+    var div=document.createElement('div');
+    div.id='placar-input-'+pendId;
+    div.style.cssText='width:100%;margin-top:10px;';
+    const pinfo=rowEl.querySelector('.pinfo');
+    if(pinfo) pinfo.appendChild(div);
+    existing=div;
+  }
+  existing.innerHTML=buildPlacarLog(pendId);
   setTimeout(function(){
-    const inp=document.getElementById('placar-val-'+pendId);
+    var inp=document.getElementById('placar-new-'+pendId);
     if(inp) inp.focus();
-  },100);
+  },80);
 }
 
-function calcPlacarSugestao(pendId){
-  const inp=document.getElementById('placar-val-'+pendId);
-  const sug=document.getElementById('placar-sug-'+pendId);
-  const btns=document.getElementById('placar-btns-'+pendId);
-  if(!inp||!sug||!btns) return;
-
-  const val=inp.value.trim();
-  if(!val){sug.textContent='';btns.style.display='none';return;}
-
-  // Parse do placar: aceita "1-0", "1 0", "1x0"
-  const parts=val.replace(/[x\s]/g,'-').split('-');
-  const g1=parseInt(parts[0]);
-  const g2=parseInt(parts[1]);
-
+function buildPlacarLog(pendId){
   const p=pendentes.find(function(x){return String(x.id)===String(pendId);});
-  if(!p||isNaN(g1)||isNaN(g2)){
-    sug.style.color='var(--text3)';
-    sug.textContent='formato: gols_casa - gols_fora (ex: 1-0)';
-    btns.style.display='none';
-    return;
+  if(!p) return '';
+  const log=placarLog[pendId]||[];
+  var logHtml='';
+  if(log.length>0){
+    logHtml='<div style="background:var(--bg3);border-radius:var(--radius);padding:8px 10px;margin-bottom:8px;">';
+    log.forEach(function(entry,i){
+      var isLast=i===log.length-1;
+      var cor=entry.green?'var(--green)':entry.red?'var(--red)':'var(--text3)';
+      logHtml+='<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border);'+(isLast?'border-bottom:none;font-weight:600;':'')+'">'
+        +'<span style="font-size:10px;color:var(--text3);font-family:var(--mono);flex-shrink:0;min-width:40px;">'+entry.time+'</span>'
+        +'<span style="font-size:18px;font-weight:700;font-family:var(--mono);color:var(--text);letter-spacing:2px;">'+entry.placar+'</span>'
+        +(entry.sug?'<span style="font-size:10px;font-family:var(--mono);color:'+cor+';">'+entry.sug+'</span>':'')
+        +(isLast?'<span style="font-size:9px;color:var(--blue);font-family:var(--mono);margin-left:auto;padding:1px 6px;background:var(--blue-dim);border-radius:99px;">última</span>':'')
+      +'</div>';
+    });
+    logHtml+='</div>';
   }
-
-  // Determina sugestão baseada no método
-  const mid=p.methodId;
-  let sugestao='';
-  let corSug='var(--text3)';
-
-  if(mid==='lay01'){
-    // Lay 0x1 — GREEN se placar final NÃO for 0x1
-    if(g1===0&&g2===1){sugestao='→ Resultado 0x1 = RED ✗';corSug='var(--red)';}
-    else{sugestao='→ Não terminou 0x1 = GREEN ✓';corSug='var(--green)';}
-  } else if(mid==='lay10'){
-    if(g1===1&&g2===0){sugestao='→ Resultado 1x0 = RED ✗';corSug='var(--red)';}
-    else{sugestao='→ Não terminou 1x0 = GREEN ✓';corSug='var(--green)';}
-  } else if(mid==='layemp'){
-    if(g1===g2){sugestao='→ Empate = RED ✗';corSug='var(--red)';}
-    else{sugestao='→ Não empatou = GREEN ✓';corSug='var(--green)';}
-  } else if(mid==='layover'||mid==='over25'){
-    const total=g1+g2;
-    if(total>2){sugestao='→ Mais de 2.5 gols = RED ✗';corSug='var(--red)';}
-    else{sugestao='→ 2.5 gols ou menos = GREEN ✓';corSug='var(--green)';}
-  } else if(mid==='layunder'||mid==='afrente'){
-    const total2=g1+g2;
-    if(total2<=2){sugestao='→ 2.5 gols ou menos = RED ✗';corSug='var(--red)';}
-    else{sugestao='→ Mais de 2.5 gols = GREEN ✓';corSug='var(--green)';}
-  } else {
-    // Método personalizado — só mostra placar
-    sugestao='Placar: '+g1+' x '+g2+' — escolha o resultado manualmente';
+  var pendIdx=pendentes.findIndex(function(x){return String(x.id)===String(pendId);});
+  var lastEntry=log.length?log[log.length-1]:null;
+  var confirmHtml='';
+  if(lastEntry&&(lastEntry.green||lastEntry.red)){
+    confirmHtml='<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">'
+      +(lastEntry.green?'<button onclick="confirmPlacarBtn(this)" data-idx="'+pendIdx+'" data-res="green" data-pl="'+lastEntry.placar+'" class="btn g" style="font-size:13px;padding:7px 20px;font-weight:700;">✓ Confirmar GREEN</button>':'')
+      +(lastEntry.red?'<button onclick="confirmPlacarBtn(this)" data-idx="'+pendIdx+'" data-res="red" data-pl="'+lastEntry.placar+'" class="btn r" style="font-size:13px;padding:7px 20px;font-weight:700;">✗ Confirmar RED</button>':'')
+    +'</div>';
   }
+  return '<div style="padding:10px 12px;background:rgba(79,142,247,0.06);border:1px solid var(--blue-border);border-radius:var(--radius);">'
+    +'<div style="font-size:10px;font-family:var(--mono);color:var(--blue);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;">🔍 Log de consultas — '+p.obs+'</div>'
+    +logHtml
+    +confirmHtml
+    +'<div style="display:flex;gap:8px;align-items:center;">'
+      +'<input id="placar-new-'+pendId+'" type="text" placeholder="ex: 0-1" maxlength="8"'
+        +' style="width:90px;padding:7px 10px;font-size:16px;font-weight:700;font-family:var(--mono);border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);text-align:center;"'
+        +' oninput="previewPlacar(\''+pendId+'\')" onkeydown="if(event.key===\'Enter\') registrarPlacarLog(\''+pendId+'\')">'  
+      +'<button onclick="registrarPlacarLog(\''+pendId+'\')" class="btn b" style="font-size:12px;padding:6px 14px;">+ Registrar placar</button>'
+      +'<span id="placar-sug-'+pendId+'" style="font-size:11px;font-family:var(--mono);color:var(--text3);"></span>'
+    +'</div>'
+  +'</div>';
+}
 
-  sug.style.color=corSug;
-  sug.textContent=sugestao;
+function previewPlacar(pendId){
+  var inp=document.getElementById('placar-new-'+pendId);
+  var sug=document.getElementById('placar-sug-'+pendId);
+  if(!inp||!sug) return;
+  var s=getSugestao(pendId,inp.value.trim());
+  sug.style.color=s.cor; sug.textContent=s.texto;
+}
 
-  // Botões de confirmação
-  const isGreen=sugestao.includes('GREEN');
-  const isRed=sugestao.includes('RED');
-  const pendIdx=pendentes.findIndex(function(x){return String(x.id)===String(pendId);});
+function getSugestao(pendId,val){
+  if(!val) return {texto:'',cor:'var(--text3)',green:false,red:false};
+  var parts=val.replace(/[xX ]/g,'-').split('-');
+  var g1=parseInt(parts[0]), g2=parseInt(parts[1]);
+  if(isNaN(g1)||isNaN(g2)) return {texto:'ex: 0-1',cor:'var(--text3)',green:false,red:false};
+  var p=pendentes.find(function(x){return String(x.id)===String(pendId);});
+  var mid=p?p.methodId:'';
+  if(mid==='lay01') return (g1===0&&g2===1)?{texto:'0x1 → RED ✗',cor:'var(--red)',green:false,red:true}:{texto:'Não 0x1 → GREEN ✓',cor:'var(--green)',green:true,red:false};
+  if(mid==='lay10') return (g1===1&&g2===0)?{texto:'1x0 → RED ✗',cor:'var(--red)',green:false,red:true}:{texto:'Não 1x0 → GREEN ✓',cor:'var(--green)',green:true,red:false};
+  if(mid==='layemp') return g1===g2?{texto:'Empate → RED ✗',cor:'var(--red)',green:false,red:true}:{texto:'Sem empate → GREEN ✓',cor:'var(--green)',green:true,red:false};
+  if(mid==='layover'||mid==='over25') return (g1+g2)>2?{texto:'+2.5 → RED ✗',cor:'var(--red)',green:false,red:true}:{texto:'-2.5 → GREEN ✓',cor:'var(--green)',green:true,red:false};
+  return {texto:g1+' x '+g2,cor:'var(--text3)',green:false,red:false};
+}
 
-  btns.style.display='flex';
-  btns.innerHTML=(isGreen
-    ?'<button onclick="confirmPlacarBtn(this)" data-idx="'+pendIdx+'" data-res="green" data-pl="'+val+'" class="btn g" style="font-size:12px;font-weight:700;">✓ Confirmar GREEN</button>'
-    :'')
-  +(isRed
-    ?'<button onclick="confirmPlacarBtn(this)" data-idx="'+pendIdx+'" data-res="red" data-pl="'+val+'" class="btn r" style="font-size:12px;font-weight:700;">✗ Confirmar RED</button>'
-    :'')
-  +'<button onclick="confirmPlacarBtn(this)" data-idx="'+pendIdx+'" data-res="green" data-pl="'+val+'" class="btn g" style="font-size:11px;">✓ Green</button>'
-  +'<button onclick="confirmPlacarBtn(this)" data-idx="'+pendIdx+'" data-res="red" data-pl="'+val+'" class="btn r" style="font-size:11px;">✗ Red</button>';
-
-  // Remove duplicatas se já tem os botões principais
-  if(isGreen||isRed){
-    btns.innerHTML=(isGreen
-      ?'<button onclick="confirmPlacarBtn(this)" data-idx="'+pendIdx+'" data-res="green" data-pl="'+val+'" class="btn g" style="font-size:13px;padding:7px 18px;font-weight:700;">✓ Confirmar GREEN</button>'
-      :'<button onclick="confirmPlacarBtn(this)" data-idx="'+pendIdx+'" data-res="green" data-pl="'+val+'" class="btn g" style="font-size:11px;">✓ Green</button>')
-    +(isRed
-      ?'<button onclick="confirmPlacarBtn(this)" data-idx="'+pendIdx+'" data-res="red" data-pl="'+val+'" class="btn r" style="font-size:13px;padding:7px 18px;font-weight:700;">✗ Confirmar RED</button>'
-      :'<button onclick="confirmPlacarBtn(this)" data-idx="'+pendIdx+'" data-res="red" data-pl="'+val+'" class="btn r" style="font-size:11px;">✗ Red</button>');
-  }
+function registrarPlacarLog(pendId){
+  var inp=document.getElementById('placar-new-'+pendId);
+  if(!inp||!inp.value.trim()) return;
+  var val=inp.value.trim();
+  var sug=getSugestao(pendId,val);
+  var now=new Date();
+  var t=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  if(!placarLog[pendId]) placarLog[pendId]=[];
+  placarLog[pendId].push({time:t,placar:val,sug:sug.texto,green:sug.green,red:sug.red});
+  inp.value='';
+  showPlacarInput(pendId);
 }
 
 function confirmPlacarBtn(btn){
@@ -2446,6 +2435,14 @@ function showProj(mid, casaId){
   const {entries,weeksP1,wksP2,profFixed,profWeek,wkRows}=proj;
   const capMeta=metaUsar*redsUsar;
 
+  // ── Total de jogos desde a stake INICIAL (para exibir feitos/total corretamente) ──
+  // entries = jogos restantes da stake atual → não é o total correto para progresso
+  // Precisamos calcular: total desde stake base até meta
+  const projTotalDesdeZero=calcProjComOdd(stakeBase,metaUsar,redsUsar,epw,oddParaProj,im,0);
+  const totalJogosF1=projTotalDesdeZero.entries; // total do zero até a meta
+  const faltamJogosF1=entries; // entries = jogos faltando a partir da stake atual
+  const feitosJogosF1=Math.max(0,totalJogosF1-faltamJogosF1);
+
   // ── Comparação por casa ───────────────────────────────────────────────────
   const casasComEnts=casas.filter(function(c2){return entradas.some(function(e){return e.methodId===mid&&e.casaId===c2.id;});});
   const oddPorCasa=casasComEnts.map(function(c2){
@@ -2547,9 +2544,11 @@ function showProj(mid, casaId){
     +oddCompHtml
     +(function(){
       // Jogos já feitos desta combinação método+casa
-      const jogosFeitos = entsReais.length;
-      const pctJogos = entries>0 ? Math.min(100,(jogosFeitos/entries)*100) : 0;
-      const faltamJogos = Math.max(0, entries - jogosFeitos);
+      // Usa os valores calculados corretamente: total desde stake inicial
+      const jogosFeitos = feitosJogosF1;
+      const totalJogos  = totalJogosF1;
+      const faltamJogos = faltamJogosF1;
+      const pctJogos = totalJogos>0 ? Math.min(100,(jogosFeitos/totalJogos)*100) : 0;
       return '<div class="mg">'
         +'<div class="mc accent-g"><div class="ml">Jogos para meta</div><div class="mv g">'+entries+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">'+(oddReal?'usando odd real '+oddReal:'usando odd cfg '+oddConfMedia.toFixed(2))+'</div></div>'
         +'<div class="mc"><div class="ml">Semanas fase 1</div><div class="mv mv-sm">'+weeksP1+' sem</div></div>'
@@ -2600,16 +2599,16 @@ function showProj(mid, casaId){
             +'<div class="ml">Progresso — fase 1 (stake) · fase 2 (capital) · fase 3 (saques)</div>'
             +'<div style="display:flex;align-items:baseline;gap:8px;margin:6px 0 4px;">'
               +'<span style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--green);">'+jogosFeitos+'</span>'
-              +'<span style="font-size:14px;color:var(--text3);font-family:var(--mono);">/ '+entries+' jogos (fase 1)</span>'
+              +'<span style="font-size:14px;color:var(--text3);font-family:var(--mono);">/ '+totalJogos+' jogos (fase 1)</span>'
               +'<span style="font-size:11px;color:var(--amber);font-family:var(--mono);margin-left:auto;">faltam '+faltamJogos+'</span>'
             +'</div>'
             +'<div style="height:8px;background:var(--bg4);border-radius:99px;overflow:hidden;margin-bottom:10px;">'
               +'<div style="height:100%;width:'+pctJogos.toFixed(1)+'%;background:var(--green);border-radius:99px;transition:width .5s;"></div>'
             +'</div>'
-            +'<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:8px;">'+pctJogos.toFixed(1)+'% da fase 1 concluído · ritmo configurado: '+epd+'/dia × '+dpw+'d/semana = '+epd*dpw+' entradas/semana</div>'
+            +'<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:8px;">'+pctJogos.toFixed(1)+'% da fase 1 concluído · '+faltamJogos+' jogos faltam · ritmo: '+epd+'/dia × '+dpw+'d/sem</div>'
             // 3 cards de fase
             +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
-              +faseCard('var(--green)','1','Meta de stake',fmtData(dataFase1),diasCorridosFase1,semanasFase1,faltamJogos+' jogos faltam')
+              +faseCard('var(--green)','1','Meta de stake',fmtData(dataFase1),diasCorridosFase1,semanasFase1,faltamJogos+' jogos faltam ('+jogosFeitos+'/'+totalJogos+')')
               +faseCard('var(--blue)','2','Capitalização',fmtData(dataFase2),diasCorridosFase2,semanasFase2,jogosCapital+' jogos · '+fmt(capMeta))
               +faseCard('var(--amber)','3','Início de saques',fmtData(dataFase2),diasCorridosFase3,semanasFase1+semanasFase2,fmt(profWeek)+'/semana')
             +'</div>'
